@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">LSPosed 101 Navbar Button</string>
+    <string name="app_description">Adds a test button to the 3-button navigation bar.</string>
+</resources>
