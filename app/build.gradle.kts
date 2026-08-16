@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.navbarbutton"
-        minSdk = 27
+        minSdk = 29
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"

@@ -2,6 +2,7 @@ package com.example.navbarbutton;
 
 import android.accessibilityservice.AccessibilityButtonController;
 import android.accessibilityservice.AccessibilityService;
+import android.app.ActivityManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.res.Resources;
@@ -52,6 +53,8 @@ public class NavbarHook extends XposedModule {
 
     private boolean hooked = false;
 
+    private String prevActivity = "";
+
     @Override
     public void onModuleLoaded(ModuleLoadedParam param) {
         log(android.util.Log.INFO, TAG, "Module loaded zzz");
@@ -59,7 +62,9 @@ public class NavbarHook extends XposedModule {
 
     @Override
     public void onPackageReady(XposedModuleInterface.PackageReadyParam param) {
+        ClassLoader cl = param.getClassLoader();
         String packageName = param.getPackageName();
+
         if (!SYSTEMUI.equals(packageName)) {
             return;
         }
@@ -70,7 +75,6 @@ public class NavbarHook extends XposedModule {
 
         hooked = true;
 
-        ClassLoader cl = param.getClassLoader();
         log(android.util.Log.INFO, TAG, "SystemUI ready: " + cl);
 
         try {
@@ -90,32 +94,49 @@ public class NavbarHook extends XposedModule {
                             @Override
                             public void onClicked(AccessibilityButtonController controller) {
                                 log(Log.INFO, TAG, "ZZZ " + chain.getThisObject());
+
+                                ActivityManager am = (ActivityManager) ctx[0].getSystemService(Context.ACTIVITY_SERVICE);
+                                ActivityManager.RunningTaskInfo task = am.getRunningTasks(1).get(0);
+                                String curActivity = task.topActivity.getPackageName();
+
+                                // try {
+                                //     String activity = task.topActivity.toString().replaceAll("(ComponentInfo\\{|\\})", "");
+                                //     log(Log.INFO, TAG, "Top activity " + task.taskId + " " + activity);
+                                //     Runtime.getRuntime().exec(
+                                //             "am start --windowingMode 3 -n " + activity
+                                //     );
+                                //     Toast.makeText(ctx[0], task.topActivity.getPackageName(), Toast.LENGTH_SHORT).show();
+                                // } catch (Exception e) {
+                                //     log(Log.ERROR, TAG, "Freeform ", e);
+                                // }
+                                // if(true) return;
+
                                 String packageName = getLaunchApp(ctx[0]);
                                 if (packageName == null || packageName.isEmpty()) {
                                     Toast.makeText(ctx[0], "No app has been set to launch", Toast.LENGTH_SHORT).show();
+                                } else if (curActivity.equals(packageName) && !prevActivity.isEmpty()) {
+                                    Intent intent = ctx[0].getPackageManager().getLaunchIntentForPackage(prevActivity);
+                                    if (intent != null) {
+                                        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                                        ctx[0].startActivity(intent);
+                                    }
+                                    prevActivity = "";
                                 } else {
                                     Intent intent = ctx[0].getPackageManager().getLaunchIntentForPackage(packageName);
                                     if (intent != null) {
                                         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
                                         ctx[0].startActivity(intent);
                                     }
+                                    prevActivity = curActivity;
                                 }
                             }
                         }
                 });
             });
 
-            // Class<?> clazz = Class.forName(className, false, cl);
-            // hook(findMethod(clazz, "onFinishInflate")).intercept(chain -> {
-            //     Object navigationBar = chain.getThisObject();
-            //     chain.proceed();
-            //     Field field = navigationBar.getClass().getDeclaredField("mButtonDispatchers");
-            //     field.setAccessible(true);
-            //     SparseArray dispatchers = (SparseArray)field.get(navigationBar);
-            //     Object button = dispatchers.get(2131427385);
-            //     hookButtonDispatcher(button);
-            //     log(Log.INFO, TAG, "mButtonDispatchers = " + dispatchers);
-            //     return null;
+            // hook(AccessibilityManager.class.getDeclaredMethod("notifyAccessibilityButtonLongClicked", int.class)).intercept(chain -> {
+            //     log(Log.INFO, TAG, "Hooked notifyAccessibilityButtonLongClicked " + chain.getThisObject());
+            //     return chain.proceed();
             // });
         } catch (Throwable t) {
             log(android.util.Log.WARN, TAG, "Failed to hook settings", t);
