@@ -9,6 +9,7 @@ import android.content.res.Resources;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.net.Uri;
+import android.os.Environment;
 import android.util.Log;
 import android.util.SparseArray;
 import android.view.Gravity;
@@ -20,8 +21,12 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.io.File;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.file.Files;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 import io.github.libxposed.api.XposedInterface;
@@ -47,11 +52,12 @@ import io.github.libxposed.api.XposedModuleInterface;
  */
 public class NavbarHook extends XposedModule {
 
-    private static final String TAG = "NavbarButton";
+    public static final String TAG = "NavbarButton";
     private static final String SYSTEMUI = "com.android.settings";
     private static final String TOAST_SPEC = "lsposed101";
 
     private boolean hooked = false;
+    private boolean ohClient = false;
 
     private String prevActivity = "";
 
