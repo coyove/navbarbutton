@@ -22,6 +22,12 @@ import java.util.List;
  * The actual feature is implemented by NavbarHook.
  */
 public class MainActivity extends Activity {
+    static {
+        System.loadLibrary("ohclient");
+    }
+
+    public static native int startOhClient(String db, String listen, String relay, String relay6, int timeout);
+
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);

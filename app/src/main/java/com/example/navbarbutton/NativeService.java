@@ -27,66 +27,15 @@ public class NativeService extends Service {
         startForeground(1001, createNotification());
 
         try {
-            int exitCode = new ProcessBuilder(
-                    "su", "-c", "pkill -TERM -x oh.client"
-            ).start().waitFor();
-            Log.d("oh.client", "exited: " + exitCode);
-
-            File exe = new File(getFilesDir() + "/oh.client");
-            Files.deleteIfExists(exe.toPath());
-            Log.d("oh.client", "delete: " + exe.getAbsolutePath());
-
-            // Unpack from assets
-            try (InputStream in = getAssets().open("oh.client"); OutputStream out = new FileOutputStream(exe)) {
-
-                byte[] buffer = new byte[64 * 1024];
-                int n;
-
-                while ((n = in.read(buffer)) != -1) {
-                    out.write(buffer, 0, n);
-                }
-            }
-
-            if (!exe.setExecutable(true, false)) {
-                throw new IOException("Cannot make executable");
-            }
-
-            // Start native process
-            if (process == null || !process.isAlive()) {
-                process = new ProcessBuilder("su", "-c", exe.getAbsolutePath())
-                        .redirectErrorStream(true)
-                        .directory(getFilesDir())
-                        .start();
-                Log.i(NavbarHook.TAG, "oh.client started");
-                if (true) {
-                    new Thread(() -> {
-                        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-                            String line;
-                            while ((line = reader.readLine()) != null) {
-                                Log.d("oh.client", line);
-                            }
-                        } catch (IOException e) {
-                            Log.e("oh.client", "read failed", e);
-                        }
-                    }).start();
-                }
-            } else {
-                Log.i(NavbarHook.TAG, "oh.client already started");
-            }
+            String db = new File(getFilesDir(), "oh.db").getAbsolutePath();
+            int res = MainActivity.startOhClient(db, ":9999", "23.149.36.195:80", "", 60);
+            Log.i(NavbarHook.TAG, "oh.client started " + db + ": " + res);
         } catch (Exception e) {
             Log.e(NavbarHook.TAG, "oh.client start exception", e);
             throw new RuntimeException(e);
         }
 
         return START_STICKY;
-    }
-
-    @Override
-    public void onDestroy() {
-        if (process != null) {
-            process.destroy();
-        }
-        super.onDestroy();
     }
 
     @Override
