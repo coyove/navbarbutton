@@ -7,6 +7,7 @@ import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
+import android.net.VpnService;
 import android.os.Bundle;
 import android.text.Editable;
 import android.text.TextWatcher;
@@ -16,10 +17,13 @@ import android.widget.ArrayAdapter;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ListView;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import java.util.ArrayList;
 import java.util.List;
+
+import hev.sockstun.TProxyService;
 
 /**
  * The APK has a tiny launcher activity only so Android/LSPosed can install it normally.
@@ -36,6 +40,8 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
 
+        VpnService.prepare(this);
+
         Intent intent = new Intent(this, NativeService.class);
         startForegroundService(intent);
 
@@ -43,7 +49,7 @@ public class MainActivity extends Activity {
         root.setOrientation(LinearLayout.VERTICAL);
 
         TextView v = new TextView(this);
-        v.setText("LSPosed 101 Navbar Shortcut");
+        v.setText("Navbarbutton");
         v.setPadding(48, 128, 48, 48);
 
         SharedPreferences pref = this.getSharedPreferences("data", Context.MODE_PRIVATE);
@@ -70,8 +76,25 @@ public class MainActivity extends Activity {
             }
         });
 
+        Switch vpnToggle = new Switch(this);
+        vpnToggle.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            Intent i = new Intent(this, TProxyService.class);
+            if (isChecked) {
+                Intent i2 = VpnService.prepare(this);
+                if (i2 != null) {
+                    startActivityForResult(i2, 100);
+                } else {
+                    startForegroundService(i.setAction(TProxyService.ACTION_CONNECT));
+                }
+            } else {
+                startForegroundService(i.setAction(TProxyService.ACTION_DISCONNECT));
+            }
+        });
+        vpnToggle.setChecked(pref.getBoolean("vpn", false));
+
         root.addView(v, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         root.addView(relay, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        root.addView(vpnToggle, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
         root.addView(vl, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         ListView listView = new ListView(this);
