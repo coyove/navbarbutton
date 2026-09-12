@@ -3,13 +3,17 @@ package com.example.navbarbutton;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.ArrayAdapter;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.TextView;
@@ -42,19 +46,33 @@ public class MainActivity extends Activity {
         v.setText("LSPosed 101 Navbar Shortcut");
         v.setPadding(48, 128, 48, 48);
 
+        SharedPreferences pref = this.getSharedPreferences("data", Context.MODE_PRIVATE);
         TextView vl = new TextView(this);
-        vl.setText(this.getSharedPreferences("data", Context.MODE_PRIVATE).getString("launcher", ""));
+        vl.setText(pref.getString("launcher", ""));
         vl.setTypeface(null, Typeface.BOLD);
         vl.setPadding(48, 0, 48, 0);
 
-        root.addView(v, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        ));
-        root.addView(vl, new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT,
-                LinearLayout.LayoutParams.WRAP_CONTENT
-        ));
+        EditText relay = new EditText(this);
+        relay.setText(pref.getString("relay", "23.149.36.195:80"));
+        relay.setPadding(48, 0, 48, 48);
+        relay.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void afterTextChanged(Editable editable) {
+            }
+
+            @Override
+            public void beforeTextChanged(CharSequence charSequence, int i, int i1, int i2) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                pref.edit().putString("relay", s.toString()).apply();
+            }
+        });
+
+        root.addView(v, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        root.addView(relay, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+        root.addView(vl, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
 
         ListView listView = new ListView(this);
         PackageManager pm = getPackageManager();
@@ -92,10 +110,10 @@ public class MainActivity extends Activity {
 
         listView.setOnItemClickListener((parent, view, position, id) -> {
             String packageName = packages.get(position);
-            this.getSharedPreferences("data", Context.MODE_PRIVATE).edit().putString("launcher", packageName).apply();
+            pref.edit().putString("launcher", packageName).apply();
             vl.setText(packageName);
         });
-        listView.setPadding(48, 0, 48, 256);
+        listView.setPadding(0, 0, 0, 256);
 
         root.addView(listView, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,

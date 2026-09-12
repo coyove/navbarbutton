@@ -4,20 +4,14 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
+import android.content.Context;
 import android.content.Intent;
-import android.os.Build;
+import android.content.SharedPreferences;
 import android.os.Environment;
 import android.os.IBinder;
 import android.util.Log;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.nio.file.Files;
 
 public class NativeService extends Service {
     private Process process;
@@ -27,9 +21,11 @@ public class NativeService extends Service {
         startForeground(1001, createNotification());
 
         try {
+            String relay = this.getSharedPreferences("data", Context.MODE_PRIVATE).getString("relay", "23.149.36.195:80");
             String db = new File(getFilesDir(), "oh.db").getAbsolutePath();
-            int res = MainActivity.startOhClient(db, ":9999", "23.149.36.195:80", "", 60);
-            Log.i(NavbarHook.TAG, "oh.client started " + db + ": " + res);
+            db += ";" + getExternalFilesDir(null);
+            int res = MainActivity.startOhClient(db, ":9999", relay, "", 60);
+            Log.i(NavbarHook.TAG, "oh.client started " + relay + " [" + db + ": " + res);
         } catch (Exception e) {
             Log.e(NavbarHook.TAG, "oh.client start exception", e);
             throw new RuntimeException(e);
