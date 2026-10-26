@@ -1,14 +1,19 @@
 package com.example.navbarbutton;
 
 import android.app.Activity;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.graphics.Typeface;
 import android.net.VpnService;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Looper;
 import android.text.Editable;
 import android.text.TextWatcher;
 import android.view.View;
@@ -19,8 +24,14 @@ import android.widget.LinearLayout;
 import android.widget.ListView;
 import android.widget.Switch;
 import android.widget.TextView;
+import android.widget.Toast;
 
+import com.topjohnwu.superuser.ipc.RootService;
+
+import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 
 import hev.sockstun.TProxyService;
@@ -30,12 +41,6 @@ import hev.sockstun.TProxyService;
  * The actual feature is implemented by NavbarHook.
  */
 public class MainActivity extends Activity {
-    static {
-        System.loadLibrary("ohclient");
-    }
-
-    public static native int startOhClient(String db, String listen, String relay, String relay6, int timeout);
-
     @Override
     protected void onCreate(Bundle state) {
         super.onCreate(state);
@@ -54,12 +59,11 @@ public class MainActivity extends Activity {
 
         SharedPreferences pref = this.getSharedPreferences("data", Context.MODE_PRIVATE);
         TextView vl = new TextView(this);
-        vl.setText(pref.getString("launcher", ""));
         vl.setTypeface(null, Typeface.BOLD);
         vl.setPadding(48, 0, 48, 0);
 
         EditText relay = new EditText(this);
-        relay.setText(pref.getString("relay", "23.149.36.195:80"));
+        relay.setText(pref.getString("relay", "rigid.top:80"));
         relay.setPadding(48, 0, 48, 48);
         relay.addTextChangedListener(new TextWatcher() {
             @Override
@@ -100,7 +104,7 @@ public class MainActivity extends Activity {
         ListView listView = new ListView(this);
         PackageManager pm = getPackageManager();
         List<ApplicationInfo> apps = pm.getInstalledApplications(PackageManager.GET_META_DATA);
-        apps.removeIf(app -> pm.getLaunchIntentForPackage(app.packageName) == null);
+        // apps.removeIf(app -> pm.getLaunchIntentForPackage(app.packageName) == null);
 
         // Sort by app name
         apps.sort((a, b) ->
@@ -114,29 +118,36 @@ public class MainActivity extends Activity {
             packages.add(app.packageName);
         }
 
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(
-                this,
-                android.R.layout.simple_list_item_1,
-                android.R.id.text1,
-                names
-        ) {
-            @Override
-            public View getView(int position, View convertView, ViewGroup parent) {
-                View view = super.getView(position, convertView, parent);
-                TextView text1 = view.findViewById(android.R.id.text1);
-                text1.setText(names.get(position));
-                return view;
-            }
-        };
-
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_list_item_checked, names);
         listView.setAdapter(adapter);
-
+        listView.setChoiceMode(ListView.CHOICE_MODE_MULTIPLE);
         listView.setOnItemClickListener((parent, view, position, id) -> {
             String packageName = packages.get(position);
-            pref.edit().putString("launcher", packageName).apply();
-            vl.setText(packageName);
+            new Thread(() -> {
+                Looper.prepare();
+                if (listView.isItemChecked(position)) {
+                    TProxyService.requestWhitelist("add", packageName);
+                } else {
+                    TProxyService.requestWhitelist("delete", packageName);
+                }
+                Toast.makeText(this, "OK " + TProxyService.whitelistApps.size() + " apps", Toast.LENGTH_SHORT).show();
+                TProxyService.saveVpnWhitelist(getExternalFilesDir(null), TProxyService.whitelistApps);
+            }).start();
         });
         listView.setPadding(0, 0, 0, 256);
+        new Thread(() -> {
+            Looper.prepare();
+            TProxyService.requestWhitelist("", "");
+            TProxyService.saveVpnWhitelist(getExternalFilesDir(null), TProxyService.whitelistApps);
+            new Handler(Looper.getMainLooper()).post(() -> {
+                for (int i = 0; i < packages.size(); i++) {
+                    if (TProxyService.whitelistApps.contains(packages.get(i))) {
+                        listView.setItemChecked(i, true);
+                    }
+                }
+            });
+            Toast.makeText(this, "OK " + TProxyService.whitelistApps.size() + " apps", Toast.LENGTH_SHORT).show();
+        }).start();
 
         root.addView(listView, new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,

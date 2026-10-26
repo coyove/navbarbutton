@@ -20,16 +20,17 @@ public class NativeService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForeground(1001, createNotification());
 
-        try {
-            String relay = this.getSharedPreferences("data", Context.MODE_PRIVATE).getString("relay", "23.149.36.195:80");
-            String db = new File(getFilesDir(), "oh.db").getAbsolutePath();
-            db += ";" + getExternalFilesDir(null);
-            int res = MainActivity.startOhClient(db, ":9999", relay, "", 60);
-            Log.i(NavbarHook.TAG, "oh.client started " + relay + " [" + db + ": " + res);
-        } catch (Exception e) {
-            Log.e(NavbarHook.TAG, "oh.client start exception", e);
-            throw new RuntimeException(e);
-        }
+        // try {
+        //     Runtime.getRuntime().exec("su");
+        //     String relay = this.getSharedPreferences("data", Context.MODE_PRIVATE).getString("relay", "rigid.top:80");
+        //     String db = new File(getFilesDir(), "oh.db").getAbsolutePath();
+        //     db += ";" + getExternalFilesDir(null);
+        //     int res = MainActivity.startOhClient(db, ":9999", relay, "", 60);
+        //     Log.i(NavbarHook.TAG, "oh.client started " + relay + " [" + db + ": " + res);
+        // } catch (Exception e) {
+        //     Log.e(NavbarHook.TAG, "oh.client start exception", e);
+        //     throw new RuntimeException(e);
+        // }
 
         return START_STICKY;
     }

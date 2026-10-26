@@ -24,7 +24,7 @@ android {
 
     defaultConfig {
         applicationId = "com.example.navbarbutton"
-        minSdk = 29
+        minSdk = 33
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -58,8 +58,11 @@ android {
     }
 }
 
-dependencies {
+ dependencies {
     implementation("androidx.core:core:1.7.0")
-    // LSPosed/libxposed API 101.1 is compile-only: the framework provides it at runtime.
+    implementation("com.github.topjohnwu.libsu:core:6.0.0")
+    implementation("com.github.topjohnwu.libsu:service:6.0.0")
+    implementation(platform("com.squareup.okhttp3:okhttp-bom:4.12.0"))
+    implementation("com.squareup.okhttp3:okhttp")
     compileOnly("io.github.libxposed:api:101.0.1")
 }

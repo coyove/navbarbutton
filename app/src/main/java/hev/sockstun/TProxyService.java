@@ -9,15 +9,37 @@
 
 package hev.sockstun;
 
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
+import android.content.ComponentName;
 import android.content.Context;
+import android.content.ServiceConnection;
 import android.content.SharedPreferences;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
+import android.net.IpPrefix;
 import android.os.Build;
+import android.os.IBinder;
 import android.os.ParcelFileDescriptor;
 import android.app.Notification;
 import android.app.Notification.Builder;
@@ -31,6 +53,12 @@ import android.util.Log;
 import androidx.core.app.NotificationCompat;
 
 import com.example.navbarbutton.MainActivity;
+import com.example.navbarbutton.SocksService;
+import com.topjohnwu.superuser.ipc.RootService;
+
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
 
 public class TProxyService extends VpnService {
 	private static native boolean TProxyStartService(String config_path, int fd);
@@ -46,6 +74,8 @@ public class TProxyService extends VpnService {
 	}
 
 	private ParcelFileDescriptor tunFd = null;
+
+	private ServiceConnection conn = null;
 
 	@Override
 	public int onStartCommand(Intent intent, int flags, int startId) {
@@ -71,8 +101,23 @@ public class TProxyService extends VpnService {
 	}
 
 	public void startService() {
+		SocksService.vpnService = this;
 		if (tunFd != null)
 		  return;
+
+		String crelay = this.getSharedPreferences("data", Context.MODE_PRIVATE).getString("relay", "rigid.top:80");
+		String cdb = new File(getFilesDir(), "oh.db").getAbsolutePath() + ";" + getExternalFilesDir(null);
+		RootService.bind(new Intent(this, SocksService.class) {{
+			putExtra("relay", crelay);
+			putExtra("db", cdb);
+		}}, conn = new ServiceConnection() {
+			@Override
+			public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+			}
+			@Override
+			public void onServiceDisconnected(ComponentName componentName) {
+			}
+		});
 
 		/* VPN */
 		String session = "";
@@ -83,6 +128,11 @@ public class TProxyService extends VpnService {
 		{
 			builder.addAddress( "198.18.0.1", 32);
 			builder.addRoute("0.0.0.0", 0);
+			// builder.addRoute("::", 0);
+			// try {
+			// 	builder.excludeRoute(new IpPrefix(InetAddress.getByName(crelay.split(":")[0]), 32));
+			// } catch (Exception ignored) {
+			// }
 			session += "IPv4";
 		}
 		// if (prefs.getIpv6()) {
@@ -100,12 +150,22 @@ public class TProxyService extends VpnService {
 		String mappedDns = "198.18.0.2";
 		builder.addDnsServer(mappedDns);
 		session += "/Global";
-		String selfName = getApplicationContext().getPackageName();
-		try {
-			builder.addDisallowedApplication(selfName);
-		} catch (NameNotFoundException e) {
-			Log.e("navbarbutton", "addDisallowedApplication", e);
+
+		if (true) {
+			try {
+				PackageManager pm = getPackageManager();
+				Set<String> installs = pm.getInstalledApplications(PackageManager.GET_META_DATA).stream().map(a -> a.packageName).collect(Collectors.toSet());
+				for (String app : loadVpnWhitelist(getExternalFilesDir(null))) {
+					if (!app.isEmpty() && installs.contains(app)) {
+						builder.addAllowedApplication(app);
+						Log.d("navbarbutton", "addAllowedApplication whitelist: " + app);
+					}
+				}
+			} catch (NameNotFoundException e) {
+				Log.e("navbarbutton", "addAllowedApplication", e);
+			}
 		}
+
 		builder.setSession(session);
 		tunFd = builder.establish();
 		if (tunFd == null) {
@@ -139,6 +199,10 @@ public class TProxyService extends VpnService {
 					"  netmask: 240.0.0.0\n" +
 					"  cache-size: 10000\n";
 
+			tproxy_conf += "misc:\n" +
+					"  log-level: warn\n" +
+					"  log-file: " + new File(getExternalFilesDir(null), "tproxy.log");
+
 			fos.write(tproxy_conf.getBytes());
 			fos.close();
 		} catch (IOException e) {
@@ -171,7 +235,9 @@ public class TProxyService extends VpnService {
 		}
 		tunFd = null;
 
-		System.exit(0);
+		if (conn != null)
+			RootService.unbind(conn);
+		// System.exit(0);
 	}
 
 	private void createNotification(String channelName) {
@@ -198,6 +264,69 @@ public class TProxyService extends VpnService {
 			CharSequence name = "Navbarbutton";
 			NotificationChannel channel = new NotificationChannel(channelName, name, NotificationManager.IMPORTANCE_DEFAULT);
 			notificationManager.createNotificationChannel(channel);
+		}
+	}
+
+	public static List<String> loadVpnWhitelist(File dir) {
+		File backup = new File(dir, "vpn-whitelist.txt");
+		try (BufferedReader rd = new BufferedReader(new FileReader(backup))) {
+			return rd.lines().toList();
+		} catch (IOException e) {
+			Log.e("navbarbutton", "addAllowedApplication read backup", e);
+		}
+		return List.of();
+	}
+
+	public static void saveVpnWhitelist(File dir, Collection<String> lines) {
+		File backup = new File(dir, "vpn-whitelist.txt");
+		try (BufferedWriter wr = new BufferedWriter(new FileWriter(backup))) {
+			for (String line : lines) {
+				line = line.trim();
+				if (!line.isEmpty()) {
+					wr.write(line);
+					wr.write("\n");
+				}
+			}
+			wr.flush();
+		} catch (IOException e) {
+			Log.e("navbarbutton", "addAllowedApplication write backup", e);
+		}
+	}
+
+	public static HashSet<String> whitelistApps = new HashSet<>();
+
+	public static void requestWhitelist(String action, String app) {
+		if (action.isEmpty() && !whitelistApps.isEmpty())
+			return;
+		try {
+			OkHttpClient client = new OkHttpClient.Builder()
+					.connectTimeout(15, TimeUnit.SECONDS)
+					.readTimeout(15, TimeUnit.SECONDS)
+					.build();
+
+			Request request = new Request.Builder()
+					.url("https://rigid.top/android-whitelisted-apps?action=" + action + "&app=" + app)
+					// .header("User-Agent", "Mozilla/5.0 (Linux; Android 10) AppleWebKit/537.36")
+					// .header("Accept", "text/html,application/xhtml+xml,*/*;q=0.8")
+					.build();
+
+			try (Response response = client.newCall(request).execute()) {
+				if (response.isSuccessful() && response.body() != null) {
+					HashSet<String> tmp = new HashSet<>();
+					try (BufferedReader reader = new BufferedReader(
+							new InputStreamReader(response.body().byteStream(), "UTF-8"))) {
+						String line;
+						while ((line = reader.readLine()) != null) {
+							if (!line.isEmpty())
+								tmp.add(line);
+						}
+					}
+					whitelistApps.clear();
+					whitelistApps.addAll(tmp);
+				}
+			}
+		} catch (Exception e) {
+			Log.e("navbarbutton", "request whitelist", e);
 		}
 	}
 }
